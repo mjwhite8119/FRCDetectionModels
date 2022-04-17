@@ -22,6 +22,7 @@ import depthai as dai
 import numpy as np
 from networktables import NetworkTablesInstance
 
+HTTP_SERVER = '10.0.0.2'
 HTTP_SERVER_PORT = 8091
 
 class ConfigParser:
@@ -96,11 +97,11 @@ class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
 # -------------------------------------------------------------------------
 config_file = "/boot/frc.json"
 config_parser = ConfigParser(config_file)
-http_server = '192.168.0.118'
 hardware_type = "OAK-D Camera"
 frame_width = 416
 frame_height = 416
-blob_file = 'yolo_v4_tiny_openvino_2021.3_6shave.blob'
+custom_blob_file = 'yolo_v4_tiny_openvino_2021.3_6shave.blob'
+blob_file = 'yolo-v4-tiny-tf_openvino_2021.4_6shave.blob'
 
 # start TCP data server
 server_TCP = socketserver.TCPServer(('localhost', 8070), TCPServerRequest)
@@ -110,13 +111,15 @@ th.start()
 
 
 # start MJPEG HTTP Server
-server_HTTP = ThreadedHTTPServer((http_server, HTTP_SERVER_PORT), VideoStreamHandler)
+server_HTTP = ThreadedHTTPServer((HTTP_SERVER, HTTP_SERVER_PORT), VideoStreamHandler)
 th2 = threading.Thread(target=server_HTTP.serve_forever)
 th2.daemon = True
 th2.start()
 
 print("Loading the model")
-nnPath = str((Path(__file__).parent / Path(blob_file)).resolve().absolute())
+nnPath = str((Path(__file__).parent / Path(custom_blob_file)).resolve().absolute())
+if 1 < len(sys.argv):
+    nnPath = sys.argv[1]
 
 if not Path(nnPath).exists():
     print(nnPath)
@@ -208,9 +211,10 @@ with dai.Device(pipeline) as device:
 
             # Put to Network Tables
             temp_entry = []
-            temp_entry.append({"label": detection.label, "box": {"ymin": detection.ymin, "xmin": detection.xmin, 
+            temp_entry.append({"label": labelMap[detection.label], "box": {"ymin": detection.ymin, "xmin": detection.xmin, 
                                 "ymax": detection.ymax, "xmax": detection.xmax}, "confidence%": int(detection.confidence * 100)})
             entry.setString(json.dumps(temp_entry))
+
             
         # Show the frame
         server_HTTP.frametosend = frame
