@@ -101,7 +101,7 @@ hardware_type = "OAK-D Camera"
 frame_width = 416
 frame_height = 416
 custom_blob_file = 'yolo_v4_tiny_openvino_2021.3_6shave.blob'
-blob_file = 'yolo-v4-tiny-tf_openvino_2021.4_6shave.blob'
+blob_file = 'tiny-yolo-v4-tiny_openvino_2021.2_6shave.blob'
 
 # start TCP data server
 server_TCP = socketserver.TCPServer(('localhost', 8070), TCPServerRequest)
