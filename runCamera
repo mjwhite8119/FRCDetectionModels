@@ -1,0 +1,7 @@
+#!/bin/sh
+### TYPE: upload-python
+echo "Waiting 5 seconds..."
+sleep 5
+export PYTHONUNBUFFERED=1
+cd /home/pi/FRCDetectionModels
+exec /usr/bin/python3 tiny_yolo_wpi.py

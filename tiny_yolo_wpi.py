@@ -20,6 +20,7 @@ import sys
 import cv2
 import depthai as dai
 import numpy as np
+import csv
 from networktables import NetworkTablesInstance
 
 HTTP_SERVER = '10.0.0.2'
@@ -127,7 +128,11 @@ if not Path(nnPath).exists():
     raise FileNotFoundError(f'Required file/s not found, please run "{sys.executable} install_requirements.py"')
 
 print("Loading the labels")
-labelMap = ["Purple block", "Red block"]
+fileObject = open("blocks.json", "r")
+jsonContent = fileObject.read()
+labelMap = json.loads(jsonContent)
+print(labelMap)
+#labelMap = ["Purple block", "Red block"]
 
 print("Connecting to Network Tables")
 ntinst = NetworkTablesInstance.getDefault()
