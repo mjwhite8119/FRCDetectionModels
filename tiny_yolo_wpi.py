@@ -127,11 +127,11 @@ labelFile = str((Path(__file__).parent / Path(custom_label_file)).resolve().abso
 #     nnPath = sys.argv[1]
 
 if not Path(nnPath).exists():
-    print("No custom model found using " + nnPath)
+    print("No custom model found at path " + nnPath)
     nnPath = str((Path(__file__).parent / Path(default_blob_file)).resolve().absolute())
     labelFile = str((Path(__file__).parent / Path(default_label_file)).resolve().absolute())
-    print("Using " + nnPath)
-    print("Using label file " + labelFile)
+    print("Using:" + nnPath)
+    print("with label file:" + labelFile)
     # import sys
     # raise FileNotFoundError(f'No custom model found using "{nnPath}"')
 
