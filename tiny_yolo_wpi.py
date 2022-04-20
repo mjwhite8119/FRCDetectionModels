@@ -102,9 +102,9 @@ hardware_type = "OAK-D Camera"
 frame_width = 416
 frame_height = 416
 # custom_blob_file = 'yolo_v4_tiny_openvino_2021.3_6shave.blob'
-custom_blob_file = '../custom.blob'
+custom_blob_file = '/../custom.blob'
 default_blob_file = 'tiny-yolo-v4-tiny_openvino_2021.2_6shave.blob'
-custom_label_file = '../custom.json'
+custom_label_file = '/../custom.json'
 default_label_file = 'yolo4.json'
 
 # start TCP data server
@@ -129,9 +129,10 @@ labelFile = str((Path(__file__).parent / Path(custom_label_file)).resolve().abso
 if not Path(nnPath).exists():
     nnPath = str((Path(__file__).parent / Path(default_blob_file)).resolve().absolute())
     labelFile = str((Path(__file__).parent / Path(default_label_file)).resolve().absolute())
-    # print(nnPath)
+    print("No custom model found using " + nnPath)
+    print("Using label file " + labelFile)
     # import sys
-    raise FileNotFoundError(f'No custom model found using "{nnPath}"')
+    # raise FileNotFoundError(f'No custom model found using "{nnPath}"')
 
 print("Loading the labels")
 fileObject = open(labelFile, "r")
