@@ -101,11 +101,11 @@ config_parser = ConfigParser(config_file)
 hardware_type = "OAK-D Camera"
 frame_width = 416
 frame_height = 416
-# custom_blob_file = 'yolo_v4_tiny_openvino_2021.3_6shave.blob'
+
 custom_blob_file = '../custom.blob'
-default_blob_file = 'tiny-yolo-v4_openvino_2021.2_6shave.blob'
 custom_label_file = '../custom.json'
-default_label_file = 'yolo4.json'
+default_blob_file = 'yolo-v3-tiny-tf_openvino_2021.4_6shave.blob'
+default_label_file = 'yolo-v3-tiny-labels.json'
 
 # start TCP data server
 server_TCP = socketserver.TCPServer(('localhost', 8070), TCPServerRequest)
