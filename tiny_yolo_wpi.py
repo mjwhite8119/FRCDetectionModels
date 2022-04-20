@@ -102,9 +102,9 @@ hardware_type = "OAK-D Camera"
 frame_width = 416
 frame_height = 416
 # custom_blob_file = 'yolo_v4_tiny_openvino_2021.3_6shave.blob'
-custom_blob_file = '/../custom.blob'
+custom_blob_file = '../custom.blob'
 default_blob_file = 'tiny-yolo-v4_openvino_2021.2_6shave.blob'
-custom_label_file = '/../custom.json'
+custom_label_file = '../custom.json'
 default_label_file = 'yolo4.json'
 
 # start TCP data server
