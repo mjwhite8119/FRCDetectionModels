@@ -104,6 +104,8 @@ frame_height = 416
 # custom_blob_file = 'yolo_v4_tiny_openvino_2021.3_6shave.blob'
 custom_blob_file = '../custom.blob'
 default_blob_file = 'tiny-yolo-v4-tiny_openvino_2021.2_6shave.blob'
+custom_label_file = '../custom.json'
+default_label_file = 'yolo4.json'
 
 # start TCP data server
 server_TCP = socketserver.TCPServer(('localhost', 8070), TCPServerRequest)
@@ -120,17 +122,19 @@ th2.start()
 
 print("Loading the model")
 nnPath = str((Path(__file__).parent / Path(custom_blob_file)).resolve().absolute())
-if 1 < len(sys.argv):
-    nnPath = sys.argv[1]
+labelFile = str((Path(__file__).parent / Path(custom_label_file)).resolve().absolute())
+# if 1 < len(sys.argv):
+#     nnPath = sys.argv[1]
 
 if not Path(nnPath).exists():
     nnPath = str((Path(__file__).parent / Path(default_blob_file)).resolve().absolute())
+    labelFile = str((Path(__file__).parent / Path(default_label_file)).resolve().absolute())
     # print(nnPath)
     # import sys
     raise FileNotFoundError(f'No custom model found using "{nnPath}"')
 
 print("Loading the labels")
-fileObject = open("blocks.json", "r")
+fileObject = open(labelFile, "r")
 jsonContent = fileObject.read()
 labelMap = json.loads(jsonContent)
 print(labelMap)
