@@ -147,13 +147,10 @@ classes = None
 confidence_threshold = None
 
 custom_blob_file = '../custom.blob'
-custom_label_file = '../custom.json'
 custom_config_file = '../custom_config.json'
 default_blob_file = 'yolo-v3-tiny-tf_openvino_2021.4_6shave.blob'
-default_label_file = 'yolo-v3-tiny-labels.json'
 default_config_file = 'yolo-v3-tiny-tf.json'
 nnPath = str((Path(__file__).parent / Path(custom_blob_file)).resolve().absolute())
-labelPath = str((Path(__file__).parent / Path(custom_label_file)).resolve().absolute())
 configPath = str((Path(__file__).parent / Path(custom_config_file)).resolve().absolute())
 
 # start TCP data server
