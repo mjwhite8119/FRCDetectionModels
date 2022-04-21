@@ -25,6 +25,7 @@ from networktables import NetworkTablesInstance
 
 HTTP_SERVER = '10.0.0.2'
 HTTP_SERVER_PORT = 8091
+classes = None
 
 class ConfigParser:
     def __init__(self, config_path):
@@ -109,6 +110,7 @@ def readConfig(path):
             ValueError: If path to config file does not exist
             RuntimeError: If custom handler does not contain :code:`draw` or :code:`show` methods
         """
+        global labelMap, classes, confidence_threshold
         configPath = Path(path)
         if not configPath.exists():
             raise ValueError("Path {} does not exist!".format(path))
@@ -123,7 +125,8 @@ def readConfig(path):
             if "input_size" in nnConfig:
                 inputSize = tuple(map(int, nnConfig.get("input_size").split('x')))
 
-            confidence = metadata.get("confidence_threshold", nnConfig.get("confidence_threshold", None))
+            confidence_threshold = metadata.get("confidence_threshold", nnConfig.get("confidence_threshold", None))
+            classes = metadata.get("classes", None)
             # if 'handler' in configJson:
             #     handler = loadModule(configPath.parent / configJson["handler"])
 
@@ -139,10 +142,13 @@ config_parser = ConfigParser(config_file)
 hardware_type = "OAK-D Camera"
 frame_width = 416
 frame_height = 416
+labelMap = None
+classes = None
+confidence_threshold = None
 
 custom_blob_file = '../custom.blob'
 custom_label_file = '../custom.json'
-custom_config_file = '../custom.json'
+custom_config_file = '../custom_config.json'
 default_blob_file = 'yolo-v3-tiny-tf_openvino_2021.4_6shave.blob'
 default_label_file = 'yolo-v3-tiny-labels.json'
 default_config_file = 'yolo-v3-tiny-tf.json'
@@ -174,14 +180,11 @@ if not Path(nnPath).exists():
     # raise FileNotFoundError(f'No custom model found using "{nnPath}"')
 
 # Network specific settings
-labelMap = []
+print("Loading network settings")
 readConfig(configPath)
-
-print("Loading the labels")
-# fileObject = open(labelPath, "r")
-# jsonContent = fileObject.read()
-# labelMap = json.loads(jsonContent)
 print(labelMap)
+print("Classes:", classes)
+print("Confidence Threshold:", confidence_threshold)
 
 print("Connecting to Network Tables")
 ntinst = NetworkTablesInstance.getDefault()
@@ -217,9 +220,8 @@ camRgb.setColorOrder(dai.ColorCameraProperties.ColorOrder.BGR)
 camRgb.setFps(40)
 
 # Network specific settings
-print("# classes:" + len(labelMap))
-detectionNetwork.setConfidenceThreshold(0.5)
-detectionNetwork.setNumClasses(2)
+detectionNetwork.setConfidenceThreshold(confidence_threshold)
+detectionNetwork.setNumClasses(classes)
 detectionNetwork.setCoordinateSize(4)
 detectionNetwork.setAnchors(np.array([10, 14, 23, 27, 37, 58, 81, 82, 135, 169, 344, 319]))
 detectionNetwork.setAnchorMasks({"side26": np.array([1, 2, 3]), "side13": np.array([3, 4, 5])})
