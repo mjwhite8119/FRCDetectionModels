@@ -93,6 +93,44 @@ class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
     """Handle requests in a separate thread."""
     pass
 
+def readConfig(path):
+        """
+        Parses the model config file and adjusts NNetManager values accordingly. 
+        It's advised to create a config file for every new network, as it allows to 
+        use dedicated NN nodes (for `MobilenetSSD <https://github.com/luxonis/depthai/blob/main/resources/nn/mobilenet-ssd/mobilenet-ssd.json>`__ 
+        and `YOLO <https://github.com/luxonis/depthai/blob/main/resources/nn/tiny-yolo-v3/tiny-yolo-v3.json>`__)
+        or use `custom handler <https://github.com/luxonis/depthai/blob/main/resources/nn/openpose2/openpose2.json>`__ 
+        to process and display custom network results
+
+        Args:
+            path (pathlib.Path): Path to model config file (.json)
+
+        Raises:
+            ValueError: If path to config file does not exist
+            RuntimeError: If custom handler does not contain :code:`draw` or :code:`show` methods
+        """
+        configPath = Path(path)
+        if not configPath.exists():
+            raise ValueError("Path {} does not exist!".format(path))
+
+        with configPath.open() as f:
+            configJson = json.load(f)
+            nnConfig = configJson.get("nn_config", {})
+            labelMap = configJson.get("mappings", {}).get("labels", None)
+            # nnFamily = nnConfig.get("NN_family", None)
+            outputFormat = nnConfig.get("output_format", "raw")
+            metadata = nnConfig.get("NN_specific_metadata", {})
+            if "input_size" in nnConfig:
+                inputSize = tuple(map(int, nnConfig.get("input_size").split('x')))
+
+            confidence = metadata.get("confidence_threshold", nnConfig.get("confidence_threshold", None))
+            # if 'handler' in configJson:
+            #     handler = loadModule(configPath.parent / configJson["handler"])
+
+            #     if not callable(getattr(self._handler, "draw", None)) or not callable(getattr(self._handler, "decode", None)):
+            #         raise RuntimeError("Custom model handler does not contain 'draw' or 'decode' methods!")
+
+
 # -------------------------------------------------------------------------
 # Main Program Start
 # -------------------------------------------------------------------------
@@ -104,8 +142,13 @@ frame_height = 416
 
 custom_blob_file = '../custom.blob'
 custom_label_file = '../custom.json'
+custom_config_file = '../custom.json'
 default_blob_file = 'yolo-v3-tiny-tf_openvino_2021.4_6shave.blob'
 default_label_file = 'yolo-v3-tiny-labels.json'
+default_config_file = 'yolo-v3-tiny-tf.json'
+nnPath = str((Path(__file__).parent / Path(custom_blob_file)).resolve().absolute())
+labelPath = str((Path(__file__).parent / Path(custom_label_file)).resolve().absolute())
+configPath = str((Path(__file__).parent / Path(custom_config_file)).resolve().absolute())
 
 # start TCP data server
 server_TCP = socketserver.TCPServer(('localhost', 8070), TCPServerRequest)
@@ -121,26 +164,24 @@ th2.daemon = True
 th2.start()
 
 print("Loading the model")
-nnPath = str((Path(__file__).parent / Path(custom_blob_file)).resolve().absolute())
-labelFile = str((Path(__file__).parent / Path(custom_label_file)).resolve().absolute())
-# if 1 < len(sys.argv):
-#     nnPath = sys.argv[1]
-
 if not Path(nnPath).exists():
     print("No custom model found at path " + nnPath)
     nnPath = str((Path(__file__).parent / Path(default_blob_file)).resolve().absolute())
-    labelFile = str((Path(__file__).parent / Path(default_label_file)).resolve().absolute())
+    labelPath = str((Path(__file__).parent / Path(default_label_file)).resolve().absolute())
     print("Using:" + nnPath)
-    print("with label file:" + labelFile)
+    print("with label file:" + labelPath)
     # import sys
     # raise FileNotFoundError(f'No custom model found using "{nnPath}"')
 
+# Network specific settings
+labelMap = []
+readConfig(configPath)
+
 print("Loading the labels")
-fileObject = open(labelFile, "r")
-jsonContent = fileObject.read()
-labelMap = json.loads(jsonContent)
+# fileObject = open(labelPath, "r")
+# jsonContent = fileObject.read()
+# labelMap = json.loads(jsonContent)
 print(labelMap)
-#labelMap = ["Purple block", "Red block"]
 
 print("Connecting to Network Tables")
 ntinst = NetworkTablesInstance.getDefault()
@@ -176,6 +217,7 @@ camRgb.setColorOrder(dai.ColorCameraProperties.ColorOrder.BGR)
 camRgb.setFps(40)
 
 # Network specific settings
+print("# classes:" + len(labelMap))
 detectionNetwork.setConfidenceThreshold(0.5)
 detectionNetwork.setNumClasses(2)
 detectionNetwork.setCoordinateSize(4)
