@@ -22,7 +22,6 @@ import depthai as dai
 import numpy as np
 import csv
 from networktables import NetworkTablesInstance
-from cscore import CameraServer, MjpegServer
 
 HTTP_SERVER = '10.0.0.2'
 HTTP_SERVER_PORT = 8091
@@ -57,20 +56,7 @@ class ConfigParser:
 
     def parseError(self, str, config_file):
         """Report parse error."""
-        print("config error in '" + config_file + "': " + str, file=sys.stderr)
-
-
-class TCPServerRequest(socketserver.BaseRequestHandler):
-    def handle(self):
-        # Handle is called each time a client is connected
-        # When OpenDataCam connects, do not return - instead keep the connection open and keep streaming data
-        # First send HTTP header
-        header = 'HTTP/1.0 200 OK\r\nServer: Mozarella/2.2\r\nAccept-Range: bytes\r\nConnection: close\r\nMax-Age: 0\r\nExpires: 0\r\nCache-Control: no-cache, private\r\nPragma: no-cache\r\nContent-Type: application/json\r\n\r\n'
-        self.request.send(header.encode())
-        while True:
-            sleep(0.1)
-            if hasattr(self.server, 'datatosend'):
-                self.request.send(self.server.datatosend.encode() + "\r\n".encode())
+        print("config error in '" + config_file + "': " + str, file=sys.stderr)     
 
 # HTTPServer MJPEG
 class VideoStreamHandler(BaseHTTPRequestHandler):
@@ -128,13 +114,7 @@ class NetworkConfigParser:
 
             self.confidence_threshold = metadata.get("confidence_threshold", nnConfig.get("confidence_threshold", None))
             self.classes = metadata.get("classes", None)
-            # if 'handler' in configJson:
-            #     handler = loadModule(configPath.parent / configJson["handler"])
-
-            #     if not callable(getattr(self._handler, "draw", None)) or not callable(getattr(self._handler, "decode", None)):
-            #         raise RuntimeError("Custom model handler does not contain 'draw' or 'decode' methods!")
-
-
+           
 # -------------------------------------------------------------------------
 # Main Program Start
 # -------------------------------------------------------------------------
@@ -151,20 +131,11 @@ default_config_file = 'yolo-v3-tiny-tf.json'
 nnPath = str((Path(__file__).parent / Path(custom_blob_file)).resolve().absolute())
 configPath = str((Path(__file__).parent / Path(custom_config_file)).resolve().absolute())
 
-# start TCP data server
-server_TCP = socketserver.TCPServer(('localhost', 8070), TCPServerRequest)
-th = threading.Thread(target=server_TCP.serve_forever)
-th.daemon = True
-th.start()
-
-
 # start MJPEG HTTP Server
 server_HTTP = ThreadedHTTPServer((HTTP_SERVER, HTTP_SERVER_PORT), VideoStreamHandler)
 th2 = threading.Thread(target=server_HTTP.serve_forever)
 th2.daemon = True
 th2.start()
-
-# outputStream = CameraServer.getInstance().putVideo("Target", frame_width, frame_height)
 
 print("Loading the model")
 if not Path(nnPath).exists():
@@ -257,7 +228,7 @@ with dai.Device(pipeline) as device:
         normVals[::2] = frame.shape[1]
         return (np.clip(np.array(bbox), 0, 1) * normVals).astype(int)
 
-    def displayFrame(name, frame, output):
+    def displayFrame(name, frame):
         color = (255, 0, 0)
         for detection in detections:
             bbox = frameNorm(frame, (detection.xmin, detection.ymin, detection.xmax, detection.ymax))
@@ -270,10 +241,8 @@ with dai.Device(pipeline) as device:
             temp_entry.append({"label": network_config_parser.labelMap[detection.label], "box": {"ymin": detection.ymin, "xmin": detection.xmin, 
                                 "ymax": detection.ymax, "xmax": detection.xmax}, "confidence": int(detection.confidence * 100)})
             entry.setString(json.dumps(temp_entry))
-
-            
+    
         # Show the frame
-        # output.putFrame(frame)
         server_HTTP.frametosend = frame
 
     while True:
@@ -297,7 +266,7 @@ with dai.Device(pipeline) as device:
             counter += 1
 
         if frame is not None:
-            displayFrame("rgb", frame, outputStream)
+            displayFrame("rgb", frame)
 
         if cv2.waitKey(1) == ord('q'):
             break
