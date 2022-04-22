@@ -222,8 +222,8 @@ camRgb.setColorOrder(dai.ColorCameraProperties.ColorOrder.BGR)
 camRgb.setFps(40)
 
 # Network specific settings
-detectionNetwork.setConfidenceThreshold(confidence_threshold)
-detectionNetwork.setNumClasses(classes)
+detectionNetwork.setConfidenceThreshold(network_config_parser.confidence_threshold)
+detectionNetwork.setNumClasses(network_config_parser.classes)
 detectionNetwork.setCoordinateSize(4)
 detectionNetwork.setAnchors(np.array([10, 14, 23, 27, 37, 58, 81, 82, 135, 169, 344, 319]))
 detectionNetwork.setAnchorMasks({"side26": np.array([1, 2, 3]), "side13": np.array([3, 4, 5])})
