@@ -170,9 +170,9 @@ print("Loading the model")
 if not Path(nnPath).exists():
     print("No custom model found at path " + nnPath)
     nnPath = str((Path(__file__).parent / Path(default_blob_file)).resolve().absolute())
-    labelPath = str((Path(__file__).parent / Path(default_label_file)).resolve().absolute())
+    configPath = str((Path(__file__).parent / Path(default_config_file)).resolve().absolute())
     print("Using:" + nnPath)
-    print("with label file:" + labelPath)
+    print("with config file:", configPath)
     # import sys
     # raise FileNotFoundError(f'No custom model found using "{nnPath}"')
 
