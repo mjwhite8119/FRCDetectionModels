@@ -15,7 +15,6 @@ import sys
 from socketserver import ThreadingMixIn
 from PIL import Image
 from pathlib import Path
-import sys
 import cv2
 import depthai as dai
 import numpy as np
@@ -136,6 +135,7 @@ th2.daemon = True
 th2.start()
 
 # Load the model
+print("Running tiny_yolo_wpi.py")
 print("Loading the model")
 if not Path(nnPath).exists():
     print("No custom model found at path " + nnPath)

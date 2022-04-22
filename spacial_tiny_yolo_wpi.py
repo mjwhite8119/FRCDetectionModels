@@ -9,7 +9,6 @@ from time import sleep
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from io import BytesIO
 from pathlib import Path
-import sys
 from socketserver import ThreadingMixIn
 from PIL import Image
 from pathlib import Path
@@ -139,6 +138,7 @@ th2.daemon = True
 th2.start()
 
 # Load the model
+print("Running spacial_tiny_yolo_wpi.py")
 print("Loading the model")
 if not Path(nnPath).exists():
     print("No custom model found at path " + nnPath)
@@ -270,7 +270,7 @@ with dai.Device(pipeline) as device:
             startTime = current_time
 
         detections = inDet.detections
-        
+
         if len(detections) != 0:
             boundingBoxMapping = xoutBoundingBoxDepthMappingQueue.get()
             roiDatas = boundingBoxMapping.getConfigData()
