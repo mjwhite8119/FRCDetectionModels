@@ -4,4 +4,4 @@ echo "Waiting 5 seconds..."
 sleep 5
 export PYTHONUNBUFFERED=1
 cd /home/pi/FRCDetectionModels
-exec /usr/bin/python3 spacial_tiny_yolo_wpi.py
+exec /usr/bin/python3 tiny_yolo_wpi.py
