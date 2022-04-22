@@ -22,6 +22,7 @@ import depthai as dai
 import numpy as np
 import csv
 from networktables import NetworkTablesInstance
+from cscore import CameraServer, MjpegServer
 
 HTTP_SERVER = '10.0.0.2'
 HTTP_SERVER_PORT = 8091
@@ -96,7 +97,6 @@ class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
 
 class NetworkConfigParser:
     def __init__(self, path):
-# def readConfig(path):
         """
         Parses the model config file and adjusts NNetManager values accordingly. 
         It's advised to create a config file for every new network, as it allows to 
@@ -112,7 +112,6 @@ class NetworkConfigParser:
             ValueError: If path to config file does not exist
             RuntimeError: If custom handler does not contain :code:`draw` or :code:`show` methods
         """
-        # global labelMap, classes, confidence_threshold
         configPath = Path(path)
         if not configPath.exists():
             raise ValueError("Path {} does not exist!".format(path))
@@ -121,11 +120,11 @@ class NetworkConfigParser:
             configJson = json.load(f)
             nnConfig = configJson.get("nn_config", {})
             self.labelMap = configJson.get("mappings", {}).get("labels", None)
-            # nnFamily = nnConfig.get("NN_family", None)
-            outputFormat = nnConfig.get("output_format", "raw")
+            self.nnFamily = nnConfig.get("NN_family", None)
+            self.outputFormat = nnConfig.get("output_format", "raw")
             metadata = nnConfig.get("NN_specific_metadata", {})
             if "input_size" in nnConfig:
-                inputSize = tuple(map(int, nnConfig.get("input_size").split('x')))
+                self.inputSize = tuple(map(int, nnConfig.get("input_size").split('x')))
 
             self.confidence_threshold = metadata.get("confidence_threshold", nnConfig.get("confidence_threshold", None))
             self.classes = metadata.get("classes", None)
@@ -144,9 +143,6 @@ config_parser = ConfigParser(config_file)
 hardware_type = "OAK-D Camera"
 frame_width = 416
 frame_height = 416
-# labelMap = None
-# classes = None
-# confidence_threshold = None
 
 custom_blob_file = '../custom.blob'
 custom_config_file = '../custom_config.json'
@@ -163,10 +159,12 @@ th.start()
 
 
 # start MJPEG HTTP Server
-server_HTTP = ThreadedHTTPServer((HTTP_SERVER, HTTP_SERVER_PORT), VideoStreamHandler)
-th2 = threading.Thread(target=server_HTTP.serve_forever)
-th2.daemon = True
-th2.start()
+# server_HTTP = ThreadedHTTPServer((HTTP_SERVER, HTTP_SERVER_PORT), VideoStreamHandler)
+# th2 = threading.Thread(target=server_HTTP.serve_forever)
+# th2.daemon = True
+# th2.start()
+
+outputStream = CameraServer.getInstance().putVideo("Target", frame_width, frame_height)
 
 print("Loading the model")
 if not Path(nnPath).exists():
@@ -183,7 +181,6 @@ print("Loading network settings")
 
 # Read the configuration file
 network_config_parser = NetworkConfigParser(configPath)
-# readConfig(configPath)
 print(network_config_parser.labelMap)
 print("Classes:", network_config_parser.classes)
 print("Confidence Threshold:", network_config_parser.confidence_threshold)
@@ -260,7 +257,7 @@ with dai.Device(pipeline) as device:
         normVals[::2] = frame.shape[1]
         return (np.clip(np.array(bbox), 0, 1) * normVals).astype(int)
 
-    def displayFrame(name, frame):
+    def displayFrame(name, frame, output):
         color = (255, 0, 0)
         for detection in detections:
             bbox = frameNorm(frame, (detection.xmin, detection.ymin, detection.xmax, detection.ymax))
@@ -276,7 +273,8 @@ with dai.Device(pipeline) as device:
 
             
         # Show the frame
-        server_HTTP.frametosend = frame
+        output.putFrame(frame)
+        # server_HTTP.frametosend = frame
         # cv2.imshow(name, frame)
 
     while True:
@@ -300,7 +298,7 @@ with dai.Device(pipeline) as device:
             counter += 1
 
         if frame is not None:
-            displayFrame("rgb", frame)
+            displayFrame("rgb", frame, outputStream)
 
         if cv2.waitKey(1) == ord('q'):
             break
