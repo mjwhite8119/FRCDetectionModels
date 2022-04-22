@@ -159,12 +159,12 @@ th.start()
 
 
 # start MJPEG HTTP Server
-# server_HTTP = ThreadedHTTPServer((HTTP_SERVER, HTTP_SERVER_PORT), VideoStreamHandler)
-# th2 = threading.Thread(target=server_HTTP.serve_forever)
-# th2.daemon = True
-# th2.start()
+server_HTTP = ThreadedHTTPServer((HTTP_SERVER, HTTP_SERVER_PORT), VideoStreamHandler)
+th2 = threading.Thread(target=server_HTTP.serve_forever)
+th2.daemon = True
+th2.start()
 
-outputStream = CameraServer.getInstance().putVideo("Target", frame_width, frame_height)
+# outputStream = CameraServer.getInstance().putVideo("Target", frame_width, frame_height)
 
 print("Loading the model")
 if not Path(nnPath).exists():
@@ -273,9 +273,8 @@ with dai.Device(pipeline) as device:
 
             
         # Show the frame
-        output.putFrame(frame)
-        # server_HTTP.frametosend = frame
-        # cv2.imshow(name, frame)
+        # output.putFrame(frame)
+        server_HTTP.frametosend = frame
 
     while True:
         if syncNN:
