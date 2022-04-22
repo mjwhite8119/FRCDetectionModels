@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 
-"""
-Get a tiny yolo v4 model and displays it to localhost:8091
-"""
-
+import numpy as np
+import time
 import json
 import threading
 import time
@@ -22,6 +20,11 @@ import numpy as np
 import csv
 from networktables import NetworkTablesInstance
 
+'''
+Spatial Tiny-yolo example
+  Performs inference on RGB camera and retrieves spatial location coordinates: x,y,z relative to the center of depth map.
+  Can be used for tiny-yolo-v3 or tiny-yolo-v4 networks
+'''
 HTTP_SERVER = '10.0.0.2'
 HTTP_SERVER_PORT = 8091
 
@@ -144,7 +147,7 @@ if not Path(nnPath).exists():
     print("Using:" + nnPath)
     print("with config file:", configPath)
 
-# Read the model configuration file
+## Read the model configuration file
 print("Loading network settings")
 network_config_parser = NetworkConfigParser(configPath)
 print(network_config_parser.labelMap)
@@ -172,39 +175,64 @@ pipeline = dai.Pipeline()
 
 # Define sources and outputs
 camRgb = pipeline.create(dai.node.ColorCamera)
-detectionNetwork = pipeline.create(dai.node.YoloDetectionNetwork)
+spatialDetectionNetwork = pipeline.create(dai.node.YoloSpatialDetectionNetwork)
+monoLeft = pipeline.create(dai.node.MonoCamera)
+monoRight = pipeline.create(dai.node.MonoCamera)
+stereo = pipeline.create(dai.node.StereoDepth)
+
 xoutRgb = pipeline.create(dai.node.XLinkOut)
-nnOut = pipeline.create(dai.node.XLinkOut)
+xoutNN = pipeline.create(dai.node.XLinkOut)
+xoutBoundingBoxDepthMapping = pipeline.create(dai.node.XLinkOut)
+xoutDepth = pipeline.create(dai.node.XLinkOut)
 
 xoutRgb.setStreamName("rgb")
-nnOut.setStreamName("nn")
+xoutNN.setStreamName("detections")
+xoutBoundingBoxDepthMapping.setStreamName("boundingBoxDepthMapping")
+xoutDepth.setStreamName("depth")
 
-# Camera Properties
+# Properties
 camRgb.setPreviewSize(frame_width, frame_height)
 camRgb.setResolution(dai.ColorCameraProperties.SensorResolution.THE_1080_P)
 camRgb.setInterleaved(False)
 camRgb.setColorOrder(dai.ColorCameraProperties.ColorOrder.BGR)
-camRgb.setFps(40)
 
-# Network model specific settings
-detectionNetwork.setConfidenceThreshold(network_config_parser.confidence_threshold)
-detectionNetwork.setNumClasses(network_config_parser.classes)
-detectionNetwork.setCoordinateSize(4)
-detectionNetwork.setAnchors(np.array([10, 14, 23, 27, 37, 58, 81, 82, 135, 169, 344, 319]))
-detectionNetwork.setAnchorMasks({"side26": np.array([1, 2, 3]), "side13": np.array([3, 4, 5])})
-detectionNetwork.setIouThreshold(0.5)
-detectionNetwork.setBlobPath(nnPath)
-detectionNetwork.setNumInferenceThreads(2)
-detectionNetwork.input.setBlocking(False)
+monoLeft.setResolution(dai.MonoCameraProperties.SensorResolution.THE_400_P)
+monoLeft.setBoardSocket(dai.CameraBoardSocket.LEFT)
+monoRight.setResolution(dai.MonoCameraProperties.SensorResolution.THE_400_P)
+monoRight.setBoardSocket(dai.CameraBoardSocket.RIGHT)
+
+# setting node configs
+stereo.setDefaultProfilePreset(dai.node.StereoDepth.PresetMode.HIGH_DENSITY)
+
+spatialDetectionNetwork.setBlobPath(nnPath)
+spatialDetectionNetwork.setConfidenceThreshold(network_config_parser.confidence_threshold)
+spatialDetectionNetwork.input.setBlocking(False)
+spatialDetectionNetwork.setBoundingBoxScaleFactor(0.5)
+spatialDetectionNetwork.setDepthLowerThreshold(100)
+spatialDetectionNetwork.setDepthUpperThreshold(5000)
+
+# Yolo specific parameters
+spatialDetectionNetwork.setNumClasses(network_config_parser.classes)
+spatialDetectionNetwork.setCoordinateSize(4)
+spatialDetectionNetwork.setAnchors(np.array([10,14, 23,27, 37,58, 81,82, 135,169, 344,319]))
+spatialDetectionNetwork.setAnchorMasks({ "side26": np.array([1,2,3]), "side13": np.array([3,4,5]) })
+spatialDetectionNetwork.setIouThreshold(0.5)
 
 # Linking
-camRgb.preview.link(detectionNetwork.input)
+monoLeft.out.link(stereo.left)
+monoRight.out.link(stereo.right)
+
+camRgb.preview.link(spatialDetectionNetwork.input)
 if syncNN:
-    detectionNetwork.passthrough.link(xoutRgb.input)
+    spatialDetectionNetwork.passthrough.link(xoutRgb.input)
 else:
     camRgb.preview.link(xoutRgb.input)
 
-detectionNetwork.out.link(nnOut.input)
+spatialDetectionNetwork.out.link(xoutNN.input)
+spatialDetectionNetwork.boundingBoxMapping.link(xoutBoundingBoxDepthMapping.input)
+
+stereo.depth.link(spatialDetectionNetwork.inputDepth)
+spatialDetectionNetwork.passthroughDepth.link(xoutDepth.input)
 
 # Connect to device and start pipeline
 print("Connecting to device and starting pipeline")
@@ -212,60 +240,82 @@ with dai.Device(pipeline) as device:
 
     # Output queues will be used to get the rgb frames and nn data from the outputs defined above
     previewQueue = device.getOutputQueue(name="rgb", maxSize=4, blocking=False)
-    detectionNNQueue = device.getOutputQueue(name="nn", maxSize=4, blocking=False)
+    detectionNNQueue = device.getOutputQueue(name="detections", maxSize=4, blocking=False)
+    xoutBoundingBoxDepthMappingQueue = device.getOutputQueue(name="boundingBoxDepthMapping", maxSize=4, blocking=False)
+    depthQueue = device.getOutputQueue(name="depth", maxSize=4, blocking=False)
 
-    frame = None
-    detections = []
     startTime = time.monotonic()
     counter = 0
-    color2 = (255, 255, 255)
-
-    # nn data, being the bounding box locations, are in <0..1> range - they need to be normalized with frame width/height
-    def frameNorm(frame, bbox):
-        normVals = np.full(len(bbox), frame.shape[0])
-        normVals[::2] = frame.shape[1]
-        return (np.clip(np.array(bbox), 0, 1) * normVals).astype(int)
-
-    def displayFrame(name, frame):
-        color = (255, 0, 0)
-        for detection in detections:
-            bbox = frameNorm(frame, (detection.xmin, detection.ymin, detection.xmax, detection.ymax))
-            cv2.putText(frame, network_config_parser.labelMap[detection.label], (bbox[0] + 10, bbox[1] + 20), cv2.FONT_HERSHEY_TRIPLEX, 0.5, 255)
-            cv2.putText(frame, f"{int(detection.confidence * 100)}%", (bbox[0] + 10, bbox[1] + 40), cv2.FONT_HERSHEY_TRIPLEX, 0.5, 255)
-            cv2.rectangle(frame, (bbox[0], bbox[1]), (bbox[2], bbox[3]), color, 2)
-
-            # Put to Network Tables
-            temp_entry = []
-            temp_entry.append({"label": network_config_parser.labelMap[detection.label], "box": {"ymin": detection.ymin, "xmin": detection.xmin, 
-                                "ymax": detection.ymax, "xmax": detection.xmax}, "confidence": int(detection.confidence * 100)})
-            entry.setString(json.dumps(temp_entry))
-    
-        # Show the frame
-        server_HTTP.frametosend = frame
+    fps = 0
+    color = (255, 255, 255)
 
     # Run detection loop
     while True:
-        if syncNN:
-            inPreview = previewQueue.get()
-            inNN = detectionNNQueue.get()
-        else:
-            inPreview = previewQueue.tryGet()
-            inNN = detectionNNQueue.tryGet()
+        inPreview = previewQueue.get()
+        inDet = detectionNNQueue.get()
+        depth = depthQueue.get()
 
-        detections = inNN.detections
+        frame = inPreview.getCvFrame()
+        depthFrame = depth.getFrame() # depthFrame values are in millimeters
 
-        if inPreview is not None:
-            frame = inPreview.getCvFrame()
-            cv2.putText(frame, "NN fps: {:.2f}".format(counter / (time.monotonic() - startTime)),
-                        (2, frame.shape[0] - 4), cv2.FONT_HERSHEY_TRIPLEX, 0.4, color2)
-            fps_entry.setNumber((counter / (time.monotonic() - startTime)))            
-            
-        if inNN is not None:
-            detections = inNN.detections
-            counter += 1
+        depthFrameColor = cv2.normalize(depthFrame, None, 255, 0, cv2.NORM_INF, cv2.CV_8UC1)
+        depthFrameColor = cv2.equalizeHist(depthFrameColor)
+        depthFrameColor = cv2.applyColorMap(depthFrameColor, cv2.COLORMAP_HOT)
 
-        if frame is not None:
-            displayFrame("rgb", frame)
+        counter+=1
+        current_time = time.monotonic()
+        if (current_time - startTime) > 1 :
+            fps = counter / (current_time - startTime)
+            counter = 0
+            startTime = current_time
+
+        detections = inDet.detections
+        
+        if len(detections) != 0:
+            boundingBoxMapping = xoutBoundingBoxDepthMappingQueue.get()
+            roiDatas = boundingBoxMapping.getConfigData()
+
+            for roiData in roiDatas:
+                roi = roiData.roi
+                roi = roi.denormalize(depthFrameColor.shape[1], depthFrameColor.shape[0])
+                topLeft = roi.topLeft()
+                bottomRight = roi.bottomRight()
+                xmin = int(topLeft.x)
+                ymin = int(topLeft.y)
+                xmax = int(bottomRight.x)
+                ymax = int(bottomRight.y)
+
+                cv2.rectangle(depthFrameColor, (xmin, ymin), (xmax, ymax), color, cv2.FONT_HERSHEY_SCRIPT_SIMPLEX)
+
+
+        # If the frame is available, draw bounding boxes on it and show the frame
+        height = frame.shape[0]
+        width  = frame.shape[1]
+        for detection in detections:
+            # Denormalize bounding box
+            x1 = int(detection.xmin * width)
+            x2 = int(detection.xmax * width)
+            y1 = int(detection.ymin * height)
+            y2 = int(detection.ymax * height)
+            try:
+                label = network_config_parser.labelMap[detection.label]
+            except:
+                label = detection.label
+            cv2.putText(frame, str(label), (x1 + 10, y1 + 20), cv2.FONT_HERSHEY_TRIPLEX, 0.5, 255)
+            cv2.putText(frame, "{:.2f}".format(detection.confidence*100), (x1 + 10, y1 + 35), cv2.FONT_HERSHEY_TRIPLEX, 0.5, 255)
+            cv2.putText(frame, f"X: {int(detection.spatialCoordinates.x)} mm", (x1 + 10, y1 + 50), cv2.FONT_HERSHEY_TRIPLEX, 0.5, 255)
+            cv2.putText(frame, f"Y: {int(detection.spatialCoordinates.y)} mm", (x1 + 10, y1 + 65), cv2.FONT_HERSHEY_TRIPLEX, 0.5, 255)
+            cv2.putText(frame, f"Z: {int(detection.spatialCoordinates.z)} mm", (x1 + 10, y1 + 80), cv2.FONT_HERSHEY_TRIPLEX, 0.5, 255)
+
+            cv2.rectangle(frame, (x1, y1), (x2, y2), color, cv2.FONT_HERSHEY_SIMPLEX)
+
+        cv2.putText(frame, "NN fps: {:.2f}".format(fps), (2, frame.shape[0] - 4), cv2.FONT_HERSHEY_TRIPLEX, 0.4, color)
+        
+        # Show the frame
+        server_HTTP.frametosend = frame
+
+        # cv2.imshow("depth", depthFrameColor)
+        # cv2.imshow("rgb", frame)
 
         if cv2.waitKey(1) == ord('q'):
             break
