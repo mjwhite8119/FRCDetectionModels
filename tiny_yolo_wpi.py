@@ -94,7 +94,9 @@ class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
     """Handle requests in a separate thread."""
     pass
 
-def readConfig(path):
+class NetworkConfigParser:
+    def __init__(self, path):
+# def readConfig(path):
         """
         Parses the model config file and adjusts NNetManager values accordingly. 
         It's advised to create a config file for every new network, as it allows to 
@@ -110,7 +112,7 @@ def readConfig(path):
             ValueError: If path to config file does not exist
             RuntimeError: If custom handler does not contain :code:`draw` or :code:`show` methods
         """
-        global labelMap, classes, confidence_threshold
+        # global labelMap, classes, confidence_threshold
         configPath = Path(path)
         if not configPath.exists():
             raise ValueError("Path {} does not exist!".format(path))
@@ -118,15 +120,15 @@ def readConfig(path):
         with configPath.open() as f:
             configJson = json.load(f)
             nnConfig = configJson.get("nn_config", {})
-            labelMap = configJson.get("mappings", {}).get("labels", None)
+            self.labelMap = configJson.get("mappings", {}).get("labels", None)
             # nnFamily = nnConfig.get("NN_family", None)
             outputFormat = nnConfig.get("output_format", "raw")
             metadata = nnConfig.get("NN_specific_metadata", {})
             if "input_size" in nnConfig:
                 inputSize = tuple(map(int, nnConfig.get("input_size").split('x')))
 
-            confidence_threshold = metadata.get("confidence_threshold", nnConfig.get("confidence_threshold", None))
-            classes = metadata.get("classes", None)
+            self.confidence_threshold = metadata.get("confidence_threshold", nnConfig.get("confidence_threshold", None))
+            self.classes = metadata.get("classes", None)
             # if 'handler' in configJson:
             #     handler = loadModule(configPath.parent / configJson["handler"])
 
@@ -142,9 +144,9 @@ config_parser = ConfigParser(config_file)
 hardware_type = "OAK-D Camera"
 frame_width = 416
 frame_height = 416
-labelMap = None
-classes = None
-confidence_threshold = None
+# labelMap = None
+# classes = None
+# confidence_threshold = None
 
 custom_blob_file = '../custom.blob'
 custom_config_file = '../custom_config.json'
@@ -178,10 +180,13 @@ if not Path(nnPath).exists():
 
 # Network specific settings
 print("Loading network settings")
-readConfig(configPath)
-print(labelMap)
-print("Classes:", classes)
-print("Confidence Threshold:", confidence_threshold)
+
+# Read the configuration file
+network_config_parser = NetworkConfigParser(configPath)
+# readConfig(configPath)
+print(network_config_parser.labelMap)
+print("Classes:", network_config_parser.classes)
+print("Confidence Threshold:", network_config_parser.confidence_threshold)
 
 print("Connecting to Network Tables")
 ntinst = NetworkTablesInstance.getDefault()
@@ -259,13 +264,13 @@ with dai.Device(pipeline) as device:
         color = (255, 0, 0)
         for detection in detections:
             bbox = frameNorm(frame, (detection.xmin, detection.ymin, detection.xmax, detection.ymax))
-            cv2.putText(frame, labelMap[detection.label], (bbox[0] + 10, bbox[1] + 20), cv2.FONT_HERSHEY_TRIPLEX, 0.5, 255)
+            cv2.putText(frame, network_config_parser.labelMap[detection.label], (bbox[0] + 10, bbox[1] + 20), cv2.FONT_HERSHEY_TRIPLEX, 0.5, 255)
             cv2.putText(frame, f"{int(detection.confidence * 100)}%", (bbox[0] + 10, bbox[1] + 40), cv2.FONT_HERSHEY_TRIPLEX, 0.5, 255)
             cv2.rectangle(frame, (bbox[0], bbox[1]), (bbox[2], bbox[3]), color, 2)
 
             # Put to Network Tables
             temp_entry = []
-            temp_entry.append({"label": labelMap[detection.label], "box": {"ymin": detection.ymin, "xmin": detection.xmin, 
+            temp_entry.append({"label": network_config_parser.labelMap[detection.label], "box": {"ymin": detection.ymin, "xmin": detection.xmin, 
                                 "ymax": detection.ymax, "xmax": detection.xmax}, "confidence": int(detection.confidence * 100)})
             entry.setString(json.dumps(temp_entry))
 
